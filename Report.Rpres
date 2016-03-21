@@ -1,0 +1,185 @@
+NLP
+========================================================
+
+NATURAL LANGUAGE PREDICTION ALGORITHM  
+
+As the Capstone Project for the Data Science Specialization  
+
+author: Luis Botero  
+date:   3/20/2016
+
+INTRODUCTION
+========================================================
+
+Create a prediction algorithm based on common internet chatter repositories to predict the next word when
+typing, based on common language chains from 2 to 4 words.
+
+In order to feed the algorithm, the following steps must be taken
+
+- Read some large text filesof common internet chatter.
+- Clean up garbage, foreign accents, symbol and numeric marks.
+- Colect and store 2,3,4 word text chains
+- Create a linear regression model and prediction algorithm
+- Test the prediction power of the algorithm.
+
+
+```{r, echo=FALSE}
+# Creates staging files, a sampling of the very large original files
+set.seed(999)
+sampling<-.005         # 0.5% of the original file.
+file_names<-c("blogs","twitter","blogs")
+
+for (k in file_names)
+{
+      stg_path<-paste('./repository/stg_',k,'.txt',sep="")
+      # If the staging file already exists, just skip it
+      if (file.exists(stg_path)==FALSE)
+      {
+            #Will sample 1% of the file and write it to a staging file
+            filein<-paste('./repository/en_US.',k,'.txt',sep="")
+            # Connections for reading and writing
+            con<- file(filein, 'r', blocking = FALSE)
+            out<- file(stg_path, 'w')
+            inp<-readLines(con,n=1) 
+            a=0
+              while (length(inp)>0){
+                  if(rbinom(1,1,sampling)==1){
+                  writeLines(inp,con=out,sep="\n")
+                  }
+                 inp<-readLines(con,n=1) 
+            }
+             
+             close(con)
+             close(out)
+       }
+}
+
+
+# Data reading and collection
+# Opens file connection
+
+
+# Initializes data variables and data frames
+dfx<-NULL
+df_2gram<-data.frame(first=0,second=0,source="",stringsAsFactors = FALSE)
+df_3gram<-data.frame(first=0,second=0,third=0,source="",stringsAsFactors = FALSE)
+df_4gram<-data.frame(first=0,second=0,third=0,fourth=0,source="",stringsAsFactors = FALSE)
+j<-0
+
+for (k in file_names)
+{
+        file_string=paste("./repository/stg_",k,".txt",sep="")
+        con<-file(file_string, 'r', blocking = FALSE)
+        
+        # Word Connectors - we plan to take them out.
+        conectores<-c("a","to","on","the","or","in","is","as","not","it","for",
+                      " ","","i","you","am","he","she","we","so","and","me","by",
+                      "an","my","be","up","of","at","us","his","if","but","was",
+                      "go","no","so","is","do")
+        word.count<-0
+        
+        inp<-readLines(con,n=1) 
+        while (length(inp)>0)
+          {
+           
+           # The first filter cleans the string of symbols, punctuation marks, numbers and converts everything to lower case
+           inp<-gsub(pattern = "[^[:alnum:]///' ]", replacement = "", x = inp, ignore.case = T)  # Replaces Special chars to blank  
+           inp<-gsub(pattern = "[0-9]", replacement = "", x = inp, ignore.case = T) # Delete numbers
+           inp<-gsub(pattern = "[$-']", replacement = "", x = inp, ignore.case = T) # $ to '
+           inp<-gsub(pattern = "[.-/]", replacement = "", x = inp, ignore.case = T) # . and /
+           inp<-gsub(pattern = "[:-?]", replacement = "", x = inp, ignore.case = T) # : to ?
+           inp<-iconv(inp, "latin1", "ASCII", sub="")    # Non latin characters
+           
+           inp<-gsub("(?<=[\\s])\\s*|^\\s+|\\s+$", "", inp, perl=TRUE)#multiple to single space
+           inp<-tolower(inp) # changes everything to lower
+           inp<-noquote(inp) # Remove quotes
+        
+            while(substr(inp,1,1)==" ") # Eliminates left spaces
+             {inp<-gsub(pattern = "^ ", replacement = "", x = inp, ignore.case = T)}
+           
+           # The second section splits the large chain into words
+           words<-noquote(strsplit(inp, " ", fixed = TRUE)[[1]])
+           # Takes connectors from vector:  as, if, and, to, us
+           words<-words[!is.element(words,conectores)]
+          
+           # Run the lenght of the string splitting 2,3 and 4 word chains, in which the last will be 
+           # used as the predicted word and the previous as the predictors to feed the algorithm.
+           if (length(words)>1)
+                {
+                      for (j in 2:length(words))
+                      {
+                          df_2gram         <-rbind(df_2gram,data.frame( first =words[j-1],second=words[j],source=k))
+                          if (j>2) df_3gram<-rbind(df_3gram,data.frame(first  =words[j-2]
+                                                                       ,second=words[j-1]
+                                                                       ,third =words[j]
+                                                                       ,source=k                    
+                                                                      ))
+                          if (j>3) df_4gram<-rbind(df_4gram,data.frame(  first=words[j-3]
+                                                                       ,second=words[j-2]
+                                                                       ,third =words[j-1]
+                                                                       ,fourth=words[j]
+                                                                        ,source=k)) 
+                      }
+                }
+           
+           # Creates a string of all words
+           if (is.null(dfx))
+              dfx<-words
+           else
+               dfx<-c(dfx,words)
+        
+           inp<-readLines(con,n=1) 
+        }
+         
+        close(con)
+}
+
+# Quantity of different words
+words.df<-data.frame(table(dfx))
+names(words.df)<-c("word","freq")
+word.freq<-words.df[order(-words.df$freq),]
+number_words<-sum(word.freq$freq)
+
+
+```
+
+Data Collection
+========================================================
+This section reads the repositories from Internet blogs, twitter feeds and news and creates a list of 2,3 and 4 words that will be used later on to feed the algorithm.
+
+* Number of words          `r number_words`  
+* Number of 2-word strings `r dim(df_2gram)[1]`   
+* Number of 3-word strings `r dim(df_3gram)[1]`   
+* Number of 4-word strings `r dim(df_4gram)[1]`  
+
+Data discovery
+========================================================
+```{r,echo=FALSE}
+
+
+# Frequency chart of words
+valsort <- word.freq[ order(word.freq[,"freq"]),]
+
+op <- par(mar=c(3,3,3,3)) 
+bp <- barplot(valsort [ , "freq"], ylab="", xlab="", ylim=c(0,1)
+              ,names.arg=as.character(valsort[,"freq"]), main="Freq Distribution") 
+lines(bp, cumsum(valsort[,"freq"])/sum(valsort[,"freq"]), 
+      ylim=c(0,1.00), col='red') 
+axis(4)
+box() 
+par(op)
+```
+ 
+
+LM Regression
+========================================================
+```{r}
+
+fit4 <- lm(fourth ~ first+second+third, data=df_4gram)
+fit3 <- lm(third  ~ first+second, data=df_3gram)
+fit2 <- lm(second ~ first       , data=df_2gram)
+
+
+```
+
+
